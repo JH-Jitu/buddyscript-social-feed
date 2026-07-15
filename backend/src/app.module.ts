@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -8,6 +8,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { AuthModule } from './auth/auth.module';
 import { CommentsModule } from './comments/comments.module';
+import { buildPostgresOptions } from './database/postgres-config';
 import { PostsModule } from './posts/posts.module';
 import { UPLOADS_DIR } from './posts/upload.config';
 import { UsersModule } from './users/users.module';
@@ -19,16 +20,8 @@ const FRONTEND_DIST = join(__dirname, '..', '..', 'frontend', 'dist');
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     TypeOrmModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get<string>('POSTGRES_HOST', 'localhost'),
-        port: config.get<number>('POSTGRES_PORT', 5433),
-        username: config.get<string>('POSTGRES_USER', 'buddyscript'),
-        password: config.get<string>('POSTGRES_PASSWORD', 'buddyscript'),
-        database: config.get<string>('POSTGRES_DB', 'buddyscript'),
-        autoLoadEntities: true,
-        synchronize: false,
+      useFactory: () => ({
+        ...buildPostgresOptions(),
       }),
     }),
 

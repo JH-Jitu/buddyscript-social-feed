@@ -121,6 +121,11 @@ npm run start:prod               # everything on http://localhost:3000
 falling back to `index.html` so client-side routes survive a hard refresh.
 `/api/*` and `/uploads/*` are excluded from that fallback.
 
+On hosts like Render, set `DATABASE_URL` (Internal Database URL) plus
+`NODE_ENV=production`, `JWT_SECRET`, and `CLOUDINARY_URL`. Prefer the start
+command `npm run migration:run:prod && node dist/main` — details in
+`../learning-notes/05-deployment-guide.md` (or the copy in your notes).
+
 ## API overview
 
 All routes are prefixed with `/api`. Authenticated routes read the JWT from
@@ -223,7 +228,8 @@ Backend (`backend/`):
 | -------------------------------------------- | ---------------------------------------------------------------- |
 | `npm run start:dev`                          | API with file watching                                           |
 | `npm run build` / `npm run start:prod`       | compile and run production build                                 |
-| `npm run migration:run` / `migration:revert` | apply / roll back migrations                                     |
+| `npm run migration:run` / `migration:revert` | apply / roll back migrations (dev, TypeScript)                   |
+| `npm run migration:run:prod` / `seed:prod`   | same, against compiled `dist/` (Render start command)            |
 | `npm run seed`                               | insert demo users, posts, likes, comments (skips if data exists) |
 | `npm run lint` / `npm run test`              | ESLint / Jest                                                    |
 
