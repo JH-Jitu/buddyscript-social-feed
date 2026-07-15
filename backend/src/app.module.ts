@@ -1,9 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ServeStaticModule } from '@nestjs/serve-static';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
+import { CommentsModule } from './comments/comments.module';
+import { PostsModule } from './posts/posts.module';
+import { UPLOADS_DIR } from './posts/upload.config';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -23,8 +27,16 @@ import { UsersModule } from './users/users.module';
         synchronize: false,
       }),
     }),
+
+    ServeStaticModule.forRoot({
+      rootPath: UPLOADS_DIR,
+      serveRoot: '/uploads',
+      serveStaticOptions: { index: false, fallthrough: false },
+    }),
     UsersModule,
     AuthModule,
+    PostsModule,
+    CommentsModule,
   ],
 
   // controllers: [AppController],
