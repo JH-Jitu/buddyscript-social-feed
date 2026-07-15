@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { formatShortTime } from '../lib/time'
 import type { CommentPage, CommentView } from '../lib/types'
@@ -268,10 +268,37 @@ interface CommentBoxProps {
 
 //  The design's comment input
 //  Enter submits, Shift+Enter adds a newline — same as the real networks.
+//  The box grows with each new line up to 4 lines, then scrolls.
+
+const COMMENT_LINE_HEIGHT = 20
+const COMMENT_VERTICAL_PADDING = 16
+const COMMENT_MAX_LINES = 4
+const COMMENT_MIN_HEIGHT = 40
+const COMMENT_MAX_HEIGHT =
+  COMMENT_VERTICAL_PADDING + COMMENT_LINE_HEIGHT * COMMENT_MAX_LINES
 
 function CommentBox({ placeholder, autoFocus, textareaRef, onSubmit }: CommentBoxProps) {
   const [content, setContent] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const localRef = useRef<HTMLTextAreaElement>(null)
+
+  function assignRef(node: HTMLTextAreaElement | null) {
+    localRef.current = node
+    if (!textareaRef) return
+    textareaRef.current = node
+  }
+
+  function resizeTextarea() {
+    const el = localRef.current
+    if (!el) return
+    el.style.setProperty('height', '0px', 'important')
+    const next = Math.min(Math.max(el.scrollHeight, COMMENT_MIN_HEIGHT), COMMENT_MAX_HEIGHT)
+    el.style.setProperty('height', `${next}px`, 'important')
+  }
+
+  useLayoutEffect(() => {
+    resizeTextarea()
+  }, [content])
 
   async function handleSubmit() {
     const trimmed = content.trim()
@@ -306,10 +333,11 @@ function CommentBox({ placeholder, autoFocus, textareaRef, onSubmit }: CommentBo
         </div>
         <div className="_feed_inner_comment_box_content_txt">
           <textarea
-            ref={textareaRef}
-            className="form-control _comment_textarea"
+            ref={assignRef}
+            className="form-control _comment_textarea bs-comment-grow"
             placeholder={placeholder}
             value={content}
+            rows={1}
             autoFocus={autoFocus}
             onChange={(event) => setContent(event.target.value)}
             onKeyDown={handleKeyDown}

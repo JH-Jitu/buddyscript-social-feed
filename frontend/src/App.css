@@ -376,6 +376,37 @@
   user-select: none;
 }
 
+/* Comment box grows with Shift+Enter / wrapping, up to 4 lines.
+   Avatar stays optically centered on the first text line (not the whole box). */
+._comment_textarea.bs-comment-grow {
+  min-height: 40px !important;
+  max-height: 96px !important;
+  line-height: 20px;
+  overflow-y: auto;
+  resize: none;
+  box-sizing: border-box;
+}
+
+._feed_inner_comment_box_form {
+  align-items: flex-end;
+}
+
+._feed_inner_comment_box_content {
+  align-items: flex-start !important;
+}
+
+._feed_inner_comment_box_content_image {
+  /* 26px avatar + 8px textarea pad + 10px half-line → nudge avatar to first-line center */
+  margin-top: 7px;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+._feed_inner_comment_box_icon {
+  padding-bottom: 8px;
+  align-self: flex-end;
+}
+
 /* Post image */
 .bs-post-image {
   width: 100%;
