@@ -4,11 +4,15 @@ import { APP_GUARD } from '@nestjs/core';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { AuthModule } from './auth/auth.module';
 import { CommentsModule } from './comments/comments.module';
 import { PostsModule } from './posts/posts.module';
 import { UPLOADS_DIR } from './posts/upload.config';
 import { UsersModule } from './users/users.module';
+
+const FRONTEND_DIST = join(__dirname, '..', '..', 'frontend', 'dist');
 
 @Module({
   imports: [
@@ -33,6 +37,14 @@ import { UsersModule } from './users/users.module';
       serveRoot: '/uploads',
       serveStaticOptions: { index: false, fallthrough: false },
     }),
+    ...(existsSync(FRONTEND_DIST)
+      ? [
+          ServeStaticModule.forRoot({
+            rootPath: FRONTEND_DIST,
+            exclude: ['/api/{*splat}', '/uploads/{*splat}'],
+          }),
+        ]
+      : []),
     UsersModule,
     AuthModule,
     PostsModule,

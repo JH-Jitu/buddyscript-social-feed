@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
 import { decodeCursor, encodeCursor } from '../common/cursor';
 import { CreatePostDto } from './dto/create-post.dto';
 import { FeedQueryDto } from './dto/feed-query.dto';
@@ -25,6 +25,7 @@ export interface FeedPost {
   author: FeedAuthor;
   likeCount: number;
   likedByMe: boolean;
+  commentCount: number;
 }
 
 export interface FeedPage {
@@ -38,6 +39,7 @@ export class PostsService {
     @InjectRepository(Post) private readonly posts: Repository<Post>,
     @InjectRepository(PostLike)
     private readonly postLikes: Repository<PostLike>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async create(
@@ -56,7 +58,12 @@ export class PostsService {
     const post = await this.feedBaseQuery()
       .where('post.id = :id', { id: saved.id })
       .getOne();
-    return { ...this.toFeedPost(post!), likeCount: 0, likedByMe: false };
+    return {
+      ...this.toFeedPost(post!),
+      likeCount: 0,
+      likedByMe: false,
+      commentCount: 0,
+    };
   }
 
   async getFeed(viewerId: string, query: FeedQueryDto): Promise<FeedPage> {
@@ -82,16 +89,18 @@ export class PostsService {
     const pageRows = hasMore ? rows.slice(0, query.limit) : rows;
     const last = pageRows.at(-1);
 
-    const likeState = await this.getLikeState(
-      pageRows.map((row) => row.id),
-      viewerId,
-    );
+    const postIds = pageRows.map((row) => row.id);
+    const [likeState, commentCounts] = await Promise.all([
+      this.getLikeState(postIds, viewerId),
+      this.getCommentCounts(postIds),
+    ]);
 
     return {
       items: pageRows.map((row) => ({
         ...this.toFeedPost(row),
         likeCount: likeState.counts.get(row.id) ?? 0,
         likedByMe: likeState.likedByMe.has(row.id),
+        commentCount: commentCounts.get(row.id) ?? 0,
       })),
       nextCursor:
         hasMore && last ? encodeCursor(last.createdAt, last.id) : null,
@@ -160,13 +169,32 @@ export class PostsService {
     return { counts, likedByMe };
   }
 
+  private async getCommentCounts(
+    postIds: string[],
+  ): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    if (postIds.length === 0) return counts;
+    const rows: Array<{ post_id: string; count: string }> =
+      await this.dataSource.query(
+        `SELECT post_id, COUNT(*) AS count
+           FROM comments
+          WHERE post_id = ANY($1)
+          GROUP BY post_id`,
+        [[...postIds]],
+      );
+    for (const row of rows) counts.set(row.post_id, Number(row.count));
+    return counts;
+  }
+
   private feedBaseQuery(): SelectQueryBuilder<Post> {
     return this.posts
       .createQueryBuilder('post')
       .innerJoinAndSelect('post.author', 'author');
   }
 
-  private toFeedPost(post: Post): Omit<FeedPost, 'likeCount' | 'likedByMe'> {
+  private toFeedPost(
+    post: Post,
+  ): Omit<FeedPost, 'likeCount' | 'likedByMe' | 'commentCount'> {
     return {
       id: post.id,
       content: post.content,
