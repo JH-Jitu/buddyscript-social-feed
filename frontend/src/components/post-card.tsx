@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { formatRelativeTime } from '../lib/time'
 import type { FeedPost } from '../lib/types'
@@ -15,6 +15,20 @@ export function PostCard({ post, onChange }: PostCardProps) {
   const [isLikersOpen, setIsLikersOpen] = useState(false)
   const [isLikePending, setIsLikePending] = useState(false)
   const [commentFocusSignal, setCommentFocusSignal] = useState(0)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isMenuOpen) return
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setIsMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [isMenuOpen])
 
   async function toggleLike() {
     if (isLikePending) return
@@ -60,7 +74,7 @@ export function PostCard({ post, onChange }: PostCardProps) {
               </p>
             </div>
           </div>
-          <div className="_feed_inner_timeline_post_box_dropdown">
+          <div className="_feed_inner_timeline_post_box_dropdown" ref={menuRef}>
             <div className="_feed_timeline_post_dropdown">
               <button
                 type="button"
@@ -213,21 +227,50 @@ export function PostCard({ post, onChange }: PostCardProps) {
         )}
       </div>
       <div className="_feed_inner_timeline_total_reacts _padd_r24 _padd_l24 _mar_b26">
-        <div className="_feed_inner_timeline_total_reacts_image">
+        <div
+          className="_feed_inner_timeline_total_reacts_image"
+          onClick={() => {
+            if (post.likeCount > 0) setIsLikersOpen(true)
+          }}
+          role={post.likeCount > 0 ? 'button' : undefined}
+          tabIndex={post.likeCount > 0 ? 0 : undefined}
+          onKeyDown={(event) => {
+            if (post.likeCount > 0 && (event.key === 'Enter' || event.key === ' ')) {
+              event.preventDefault()
+              setIsLikersOpen(true)
+            }
+          }}
+        >
           {post.likeCount > 0 && (
             <>
-              <img
-                src="/assets/images/react_img1.png"
-                alt="Image"
-                className="_react_img1"
-              />
-              <button
-                type="button"
-                className="bs-count-button _feed_inner_timeline_total_reacts_para"
-                onClick={() => setIsLikersOpen(true)}
-              >
-                {post.likeCount}
-              </button>
+              <img src="/assets/images/react_img1.png" alt="Image" className="_react_img1" />
+              {post.likeCount > 1 && (
+                <img src="/assets/images/react_img2.png" alt="Image" className="_react_img" />
+              )}
+              {post.likeCount > 2 && (
+                <img
+                  src="/assets/images/react_img3.png"
+                  alt="Image"
+                  className="_react_img _rect_img_mbl_none"
+                />
+              )}
+              {post.likeCount > 3 && (
+                <img
+                  src="/assets/images/react_img4.png"
+                  alt="Image"
+                  className="_react_img _rect_img_mbl_none"
+                />
+              )}
+              {post.likeCount > 4 && (
+                <img
+                  src="/assets/images/react_img5.png"
+                  alt="Image"
+                  className="_react_img _rect_img_mbl_none"
+                />
+              )}
+              <p className="_feed_inner_timeline_total_reacts_para">
+                {post.likeCount > 9 ? '9+' : post.likeCount}
+              </p>
             </>
           )}
         </div>
@@ -237,6 +280,9 @@ export function PostCard({ post, onChange }: PostCardProps) {
               <span>{post.commentCount}</span> Comment
             </a>
           </p>
+          <p className="_feed_inner_timeline_total_reacts_para2">
+            <span>0</span> Share
+          </p>
         </div>
       </div>
       <div className="_feed_inner_timeline_reaction">
@@ -244,24 +290,28 @@ export function PostCard({ post, onChange }: PostCardProps) {
           type="button"
           className={`_feed_inner_timeline_reaction_emoji _feed_reaction${post.likedByMe ? ' _feed_reaction_active' : ''}`}
           onClick={() => void toggleLike()}
+          aria-pressed={post.likedByMe}
         >
-          <span className="_feed_inner_timeline_reaction_link">
+          <span
+            className={`_feed_inner_timeline_reaction_link${post.likedByMe ? ' bs-liked' : ''}`}
+          >
             {' '}
             <span>
               <svg
+                className="_reaction_svg"
                 xmlns="http://www.w3.org/2000/svg"
                 width="19"
                 height="19"
                 viewBox="0 0 24 24"
-                fill={post.likedByMe ? '#377DFF' : 'none'}
-                stroke={post.likedByMe ? '#377DFF' : '#000'}
+                fill="none"
+                stroke="#000"
                 strokeWidth="1.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
-              </svg>
-              {post.likedByMe ? 'Liked' : 'Like'}
+                <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+              </svg>{' '}
+              Like
             </span>
           </span>
         </button>
@@ -291,7 +341,7 @@ export function PostCard({ post, onChange }: PostCardProps) {
                   strokeLinejoin="round"
                   d="M6.938 9.313h7.125M10.5 14.063h3.563"
                 />
-              </svg>
+              </svg>{' '}
               Comment
             </span>
           </span>
@@ -313,7 +363,7 @@ export function PostCard({ post, onChange }: PostCardProps) {
                   strokeLinejoin="round"
                   d="M23 10.5L12.917 1v5.429C3.267 6.429 1 13.258 1 20c2.785-3.52 5.248-5.429 11.917-5.429V20L23 10.5z"
                 />
-              </svg>
+              </svg>{' '}
               Share
             </span>
           </span>

@@ -1,14 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
+import { DataSource, In, Repository, SelectQueryBuilder } from 'typeorm';
 import { decodeCursor, encodeCursor } from '../common/cursor';
 import { CreatePostDto } from './dto/create-post.dto';
 import { FeedQueryDto } from './dto/feed-query.dto';
-import { Post } from './post.entity';
-
-import { NotFoundException } from '@nestjs/common';
-import { In } from 'typeorm';
+import { ImageStorageService } from './image-storage.service';
 import { PostLike } from './post-like.entity';
+import { Post } from './post.entity';
 
 export interface FeedAuthor {
   id: string;
@@ -40,6 +38,7 @@ export class PostsService {
     @InjectRepository(PostLike)
     private readonly postLikes: Repository<PostLike>,
     private readonly dataSource: DataSource,
+    private readonly imageStorage: ImageStorageService,
   ) {}
 
   async create(
@@ -47,17 +46,21 @@ export class PostsService {
     dto: CreatePostDto,
     file?: Express.Multer.File,
   ): Promise<FeedPost> {
+    const imageUrl = file ? await this.imageStorage.store(file) : null;
+
     const saved = await this.posts.save(
       this.posts.create({
         authorId,
         content: dto.content,
         privacy: dto.privacy,
-        imageUrl: file ? `/uploads/${file.filename}` : null,
+        imageUrl,
       }),
     );
+
     const post = await this.feedBaseQuery()
       .where('post.id = :id', { id: saved.id })
       .getOne();
+
     return {
       ...this.toFeedPost(post!),
       likeCount: 0,
@@ -75,6 +78,7 @@ export class PostsService {
       .orderBy('post.createdAt', 'DESC')
       .addOrderBy('post.id', 'DESC')
       .take(query.limit + 1);
+
     if (query.cursor) {
       const cursor = decodeCursor(query.cursor);
       if (cursor) {
@@ -84,6 +88,7 @@ export class PostsService {
         });
       }
     }
+
     const rows = await qb.getMany();
     const hasMore = rows.length > query.limit;
     const pageRows = hasMore ? rows.slice(0, query.limit) : rows;
@@ -126,12 +131,14 @@ export class PostsService {
 
   async getLikers(postId: string, viewerId: string): Promise<FeedAuthor[]> {
     await this.assertCanViewPost(postId, viewerId);
+
     const likes = await this.postLikes.find({
       where: { postId },
       relations: { user: true },
       order: { createdAt: 'DESC' },
       take: 100,
     });
+
     return likes.map((like) => ({
       id: like.user.id,
       firstName: like.user.firstName,
@@ -147,11 +154,12 @@ export class PostsService {
     return post;
   }
 
-  //   Batch like data for a page of posts: 2 indexed queries, no N+1.
+  // Batch like data for a page of posts: 2 indexed queries, no N+1.
   private async getLikeState(postIds: string[], viewerId: string) {
     const counts = new Map<string, number>();
     const likedByMe = new Set<string>();
     if (postIds.length === 0) return { counts, likedByMe };
+
     const rawCounts: Array<{ post_id: string; count: string }> =
       await this.postLikes
         .createQueryBuilder('pl')
@@ -161,11 +169,13 @@ export class PostsService {
         .groupBy('pl.post_id')
         .getRawMany();
     for (const row of rawCounts) counts.set(row.post_id, Number(row.count));
+
     const mine = await this.postLikes.findBy({
       postId: In(postIds),
       userId: viewerId,
     });
     for (const like of mine) likedByMe.add(like.postId);
+
     return { counts, likedByMe };
   }
 
@@ -174,6 +184,7 @@ export class PostsService {
   ): Promise<Map<string, number>> {
     const counts = new Map<string, number>();
     if (postIds.length === 0) return counts;
+
     const rows: Array<{ post_id: string; count: string }> =
       await this.dataSource.query(
         `SELECT post_id, COUNT(*) AS count

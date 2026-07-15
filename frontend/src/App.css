@@ -10,6 +10,16 @@
   margin: 0 0 12px;
 }
 
+#root {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  text-align: left;
+  border: none;
+  min-height: auto;
+  display: block;
+}
+
 /* Create-post: selected image preview */
 .bs-image-preview {
   position: relative;
@@ -37,16 +47,225 @@
   cursor: pointer;
 }
 
-/* Create-post: privacy dropdown, styled to sit beside the Post button */
-.bs-privacy-select {
-  border: 1px solid #e4e6eb;
-  border-radius: 6px;
-  padding: 8px 10px;
+/* Facebook-style audience picker sits above the write textarea. */
+.bs-composer-top {
+  display: flex;
+  align-items: center;
+  margin: 0 0 12px;
+  position: relative;
+  z-index: 6;
+}
+
+.bs-privacy {
+  position: relative;
+  display: inline-flex;
+  white-space: nowrap;
+}
+
+.bs-privacy-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 16px;
+  background: rgba(24, 144, 255, 0.08);
+  color: #666666;
+  font-family: "Poppins", sans-serif;
   font-size: 13px;
-  color: #666;
+  font-weight: 500;
+  line-height: 1;
+  transition: 0.2s all ease;
+}
+
+.bs-privacy-trigger:hover,
+.bs-privacy-trigger.bs-open {
+  background: rgba(24, 144, 255, 0.15);
+  color: #1890ff;
+}
+
+.bs-privacy-caret {
+  transition: 0.2s transform ease;
+}
+
+.bs-privacy-trigger.bs-open .bs-privacy-caret {
+  transform: rotate(180deg);
+}
+
+.bs-privacy-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: auto;
+  bottom: auto;
+  width: 240px;
+  max-width: min(240px, calc(100vw - 48px));
+  padding: 6px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: rgba(149, 157, 165, 0.25) 0px 8px 24px;
+  z-index: 30;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-8px) scale(0.98);
+  transform-origin: top left;
+  transition:
+    opacity 0.2s ease,
+    transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0.2s;
+}
+
+.bs-privacy-menu.bs-open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.bs-privacy-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 8px;
   background: transparent;
-  margin-right: 12px;
-  cursor: pointer;
+  text-align: left;
+  font-family: "Poppins", sans-serif;
+  transition: 0.15s background ease;
+}
+
+.bs-privacy-option:hover {
+  background: rgba(24, 144, 255, 0.08);
+}
+
+.bs-privacy-option-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #f0f2f5;
+  color: #212121;
+  flex-shrink: 0;
+}
+
+.bs-privacy-option.bs-selected .bs-privacy-option-icon {
+  background: rgba(24, 144, 255, 0.15);
+  color: #1890ff;
+}
+
+.bs-privacy-option-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bs-privacy-option-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #212121;
+  line-height: 1.3;
+}
+
+.bs-privacy-option-sub {
+  font-size: 11px;
+  color: #666666;
+  line-height: 1.3;
+}
+
+.bs-privacy-check {
+  color: #1890ff;
+  flex-shrink: 0;
+}
+
+/* Liked state: blue icon + label on the post's Like button. */
+.bs-liked span {
+  color: #1890ff;
+}
+
+.bs-liked ._reaction_svg path {
+  stroke: #1890ff !important;
+}
+
+._feed_inner_text_area_bottom {
+  overflow: visible;
+}
+
+._feed_inner_text_area {
+  overflow: visible;
+}
+
+._feed_inner_text_area_box_form
+  > ._textarea:not(:placeholder-shown)
+  ~ ._feed_textarea_label {
+  opacity: 0;
+  transition: 0.2s all ease;
+}
+
+/* ---- Dark mode for the custom (non-template) pieces ---- */
+._dark_wrapper .bs-privacy-trigger {
+  background: rgba(24, 144, 255, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+._dark_wrapper .bs-privacy-trigger:hover,
+._dark_wrapper .bs-privacy-trigger.bs-open {
+  background: rgba(24, 144, 255, 0.25);
+  color: #1890ff;
+}
+
+._dark_wrapper .bs-privacy-menu {
+  background: #232e42;
+  box-shadow: rgba(0, 0, 0, 0.45) 0px 8px 24px;
+}
+
+._dark_wrapper .bs-privacy-option:hover {
+  background: rgba(24, 144, 255, 0.12);
+}
+
+._dark_wrapper .bs-privacy-option-icon {
+  background: #112032;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+._dark_wrapper .bs-privacy-option-title {
+  color: #ffffff;
+}
+
+._dark_wrapper .bs-privacy-option-sub {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+._dark_wrapper .bs-modal {
+  background: #232e42;
+}
+
+._dark_wrapper .bs-modal h4,
+._dark_wrapper .bs-modal-row {
+  color: #ffffff;
+}
+
+._dark_wrapper .bs-modal-head button {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+._dark_wrapper .bs-feed-status {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+._dark_wrapper .bs-form-error {
+  color: #ff6b8b;
+}
+
+._dark_wrapper .bs-privacy-label {
+  color: rgba(255, 255, 255, 0.46);
 }
 
 /* Who-liked modal */
@@ -58,6 +277,7 @@
   align-items: center;
   justify-content: center;
   z-index: 1050;
+  animation: bs-modal-backdrop-in 0.22s ease;
 }
 
 .bs-modal {
@@ -68,6 +288,28 @@
   overflow-y: auto;
   padding: 20px 24px;
   font-family: "Poppins", sans-serif;
+  animation: bs-modal-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: center center;
+}
+
+@keyframes bs-modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes bs-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .bs-modal h4 {

@@ -4,6 +4,7 @@ import { Header } from '../components/header'
 import { LeftSidebar } from '../components/left-sidebar'
 import { PostCard } from '../components/post-card'
 import { RightSidebar } from '../components/right-sidebar'
+import { StorySection } from '../components/story-section'
 import { api } from '../lib/api'
 import type { FeedPage as FeedPageData, FeedPost } from '../lib/types'
 
@@ -124,6 +125,7 @@ export function FeedPage() {
               <div className="col-xl-6 col-lg-6 col-md-12 col-sm-12">
                 <div className="_layout_middle_wrap">
                   <div className="_layout_middle_inner">
+                    <StorySection />
                     <CreatePost onCreated={handleCreated} />
                     {posts.map((post) => (
                       <PostCard key={post.id} post={post} onChange={handlePostChange} />

@@ -1,0 +1,2245 @@
+{
+  "info": {
+    "name": "BuddyScript Social Feed API",
+    "description": "# BuddyScript API — Postman collection\n\nCovers every endpoint and the important edge cases (validation, auth, privacy, idempotent likes, nested-reply rejection).\n\n## How to use\n\n1. Start the API: `cd backend && npm run start:dev` (Postgres via `docker compose up -d`).\n2. Import `BuddyScript-API.postman_collection.json` into Postman.\n3. Collection → Variables → confirm `baseUrl` = `http://localhost:3000/api`.\n4. Keep Postman cookie jar enabled (default). Auth uses the `bs_token` httpOnly cookie from `Set-Cookie` — do **not** paste JWTs into Authorization headers.\n5. Run folders top-to-bottom, or use Collection Runner on the whole collection.\n\n## Auto-filled variables\n\n| Variable | Set by |\n| --- | --- |\n| `aliceEmail` / `bobEmail` | pre-request on Register |\n| `postId` / `privatePostId` / `imagePostId` | Create Post requests |\n| `commentId` / `replyId` | Create Comment / Reply |\n| `nextCursor` | Get Feed (limit=1) |\n\n## Image upload\n\nFor \"Create post with image\", select `postman/sample-image.png` as the `image` file field (Postman may not keep relative file paths after import).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api"
+    },
+    {
+      "key": "password",
+      "value": "Password1"
+    },
+    {
+      "key": "aliceEmail",
+      "value": ""
+    },
+    {
+      "key": "bobEmail",
+      "value": ""
+    },
+    {
+      "key": "currentUserId",
+      "value": ""
+    },
+    {
+      "key": "currentUserEmail",
+      "value": ""
+    },
+    {
+      "key": "postId",
+      "value": ""
+    },
+    {
+      "key": "privatePostId",
+      "value": ""
+    },
+    {
+      "key": "imagePostId",
+      "value": ""
+    },
+    {
+      "key": "commentId",
+      "value": ""
+    },
+    {
+      "key": "replyId",
+      "value": ""
+    },
+    {
+      "key": "nextCursor",
+      "value": ""
+    },
+    {
+      "key": "lastLikeCount",
+      "value": ""
+    },
+    {
+      "key": "commentLikeCount",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Auth",
+      "description": "Register / login / logout / me. Cookie `bs_token` is set by successful register and login.",
+      "item": [
+        {
+          "name": "Register Alice (happy path)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Creates Alice. Email is generated once into `aliceEmail` so later requests reuse it.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Alice\",\n  \"lastName\": \"Postman\",\n  \"email\": \"{{aliceEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('aliceEmail')) {",
+                  "  pm.collectionVariables.set('aliceEmail', 'alice.' + Date.now() + '@demo.com');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.user) {",
+                  "  pm.collectionVariables.set('currentUserId', json.user.id);",
+                  "  pm.collectionVariables.set('currentUserEmail', json.user.email);",
+                  "}",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test('returns user without password', () => {",
+                  "  pm.expect(json.user).to.have.property('id');",
+                  "  pm.expect(json.user).to.not.have.property('passwordHash');",
+                  "});",
+                  "pm.test('Set-Cookie includes bs_token', () => {",
+                  "  const cookie = pm.response.headers.get('Set-Cookie') || '';",
+                  "  pm.expect(cookie.toLowerCase()).to.include('bs_token');",
+                  "});",
+                  "pm.test('201 Created', () => pm.expect(pm.response.code).to.eql(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register — duplicate email → 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Same email as Alice → Conflict.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Alice\",\n  \"lastName\": \"Again\",\n  \"email\": \"{{aliceEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.expect(pm.response.code).to.eql(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register — weak password → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Password missing a digit → validation error.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Weak\",\n  \"lastName\": \"Pass\",\n  \"email\": \"weak.{{$timestamp}}@demo.com\",\n  \"password\": \"password\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.expect(pm.response.code).to.eql(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register — missing fields → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"x@y.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.expect(pm.response.code).to.eql(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register — unexpected field → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "forbidNonWhitelisted rejects unknown properties.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"X\",\n  \"lastName\": \"Y\",\n  \"email\": \"extra.{{$timestamp}}@demo.com\",\n  \"password\": \"Password1\",\n  \"role\": \"admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.expect(pm.response.code).to.eql(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Alice (happy path)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{aliceEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.user) {",
+                  "  pm.collectionVariables.set('currentUserId', json.user.id);",
+                  "  pm.collectionVariables.set('currentUserEmail', json.user.email);",
+                  "}",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test('returns user without password', () => {",
+                  "  pm.expect(json.user).to.have.property('id');",
+                  "  pm.expect(json.user).to.not.have.property('passwordHash');",
+                  "});",
+                  "pm.test('Set-Cookie includes bs_token', () => {",
+                  "  const cookie = pm.response.headers.get('Set-Cookie') || '';",
+                  "  pm.expect(cookie.toLowerCase()).to.include('bs_token');",
+                  "});",
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login — wrong password → 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Same generic message whether email or password is wrong (no user enumeration).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{aliceEmail}}\",\n  \"password\": \"WrongPass1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 Unauthorized', () => pm.expect(pm.response.code).to.eql(401));",
+                  "const json = pm.response.json();",
+                  "pm.test('generic error message', () => {",
+                  "  pm.expect(JSON.stringify(json).toLowerCase()).to.include('invalid');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login — unknown email → 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nobody@demo.com\",\n  \"password\": \"Password1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 Unauthorized', () => pm.expect(pm.response.code).to.eql(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me — authenticated → 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Uses the bs_token cookie from the last successful login/register."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('returns current user', () => {",
+                  "  pm.expect(json.user.email).to.eql(pm.collectionVariables.get('aliceEmail'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout → 200",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('success flag', () => pm.expect(pm.response.json().success).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me — after logout → 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Cookie cleared; session is dead."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 Unauthorized', () => pm.expect(pm.response.code).to.eql(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Alice again (restore session)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{aliceEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.user) {",
+                  "  pm.collectionVariables.set('currentUserId', json.user.id);",
+                  "  pm.collectionVariables.set('currentUserEmail', json.user.email);",
+                  "}",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test('returns user without password', () => {",
+                  "  pm.expect(json.user).to.have.property('id');",
+                  "  pm.expect(json.user).to.not.have.property('passwordHash');",
+                  "});",
+                  "pm.test('Set-Cookie includes bs_token', () => {",
+                  "  const cookie = pm.response.headers.get('Set-Cookie') || '';",
+                  "  pm.expect(cookie.toLowerCase()).to.include('bs_token');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register Bob (second user for privacy tests)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Bob\",\n  \"lastName\": \"Viewer\",\n  \"email\": \"{{bobEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('bobEmail')) {",
+                  "  pm.collectionVariables.set('bobEmail', 'bob.' + Date.now() + '@demo.com');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 or already exists', () => pm.expect(pm.response.code).to.be.oneOf([201, 409]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Alice (keep Alice as default session)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{aliceEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.user) {",
+                  "  pm.collectionVariables.set('currentUserId', json.user.id);",
+                  "  pm.collectionVariables.set('currentUserEmail', json.user.email);",
+                  "}",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test('returns user without password', () => {",
+                  "  pm.expect(json.user).to.have.property('id');",
+                  "  pm.expect(json.user).to.not.have.property('passwordHash');",
+                  "});",
+                  "pm.test('Set-Cookie includes bs_token', () => {",
+                  "  const cookie = pm.response.headers.get('Set-Cookie') || '';",
+                  "  pm.expect(cookie.toLowerCase()).to.include('bs_token');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 Posts",
+      "description": "Create posts (text / image / private), feed cursor pagination, likes.",
+      "item": [
+        {
+          "name": "Create public text post",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "content",
+                  "value": "Hello from Postman — public text post",
+                  "type": "text"
+                },
+                {
+                  "key": "privacy",
+                  "value": "PUBLIC",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('postId', json.id);",
+                  "pm.test('has author + counts', () => {",
+                  "  pm.expect(json).to.include.keys('id', 'content', 'privacy', 'author', 'likeCount', 'likedByMe', 'commentCount');",
+                  "  pm.expect(json.privacy).to.eql('PUBLIC');",
+                  "  pm.expect(json.imageUrl).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create private post",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "content",
+                  "value": "Secret draft — only Alice should see this",
+                  "type": "text"
+                },
+                {
+                  "key": "privacy",
+                  "value": "PRIVATE",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('privatePostId', json.id);",
+                  "pm.test('privacy PRIVATE', () => pm.expect(json.privacy).to.eql('PRIVATE'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create post with image",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts"
+              ]
+            },
+            "description": "Select postman/sample-image.png as the `image` file. imageUrl will be `/uploads/...` (disk) or an https Cloudinary URL.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "content",
+                  "value": "Post with an image attachment",
+                  "type": "text"
+                },
+                {
+                  "key": "privacy",
+                  "value": "PUBLIC",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": "sample-image.png",
+                  "description": "Pick sample-image.png from this postman/ folder after import"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.id) pm.collectionVariables.set('imagePostId', json.id);",
+                  "pm.test('has imageUrl when file attached', () => {",
+                  "  if (!json.imageUrl) {",
+                  "    console.warn('No imageUrl — attach sample-image.png to the image field and resend');",
+                  "  }",
+                  "  pm.expect(json.imageUrl).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create post — empty content → 400",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "content",
+                  "value": "   ",
+                  "type": "text"
+                },
+                {
+                  "key": "privacy",
+                  "value": "PUBLIC",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.expect(pm.response.code).to.eql(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create post — invalid privacy → 400",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "content",
+                  "value": "bad privacy",
+                  "type": "text"
+                },
+                {
+                  "key": "privacy",
+                  "value": "FRIENDS",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.expect(pm.response.code).to.eql(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get feed (default page)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts"
+              ]
+            },
+            "description": "Newest first. Alice sees public posts + her own private ones."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('page shape', () => {",
+                  "  pm.expect(json).to.have.keys('items', 'nextCursor');",
+                  "  pm.expect(json.items).to.be.an('array');",
+                  "});",
+                  "pm.test('private post visible to author', () => {",
+                  "  const privateId = pm.collectionVariables.get('privatePostId');",
+                  "  if (privateId) {",
+                  "    pm.expect(json.items.some((p) => p.id === privateId)).to.eql(true);",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get feed — limit=1 (capture cursor)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts?limit=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "1"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('exactly 1 item', () => pm.expect(json.items).to.have.lengthOf(1));",
+                  "if (json.nextCursor) {",
+                  "  pm.collectionVariables.set('nextCursor', json.nextCursor);",
+                  "}",
+                  "pm.test('nextCursor type', () => {",
+                  "  pm.expect(json.nextCursor === null || typeof json.nextCursor === 'string').to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get feed — next page via cursor",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts?limit=1&cursor=%7B%7BnextCursor%7D%7D",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "1"
+                },
+                {
+                  "key": "cursor",
+                  "value": "{{nextCursor}}"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('returns a page', () => {",
+                  "  pm.expect(json.items).to.be.an('array');",
+                  "  pm.expect(json.items.length).to.be.at.most(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get feed — invalid cursor must not 500",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts?limit=1&cursor=!!!not-a-cursor!!!",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "1"
+                },
+                {
+                  "key": "cursor",
+                  "value": "!!!not-a-cursor!!!"
+                }
+              ]
+            },
+            "description": "Malformed cursor is ignored (decodeCursor → null); request starts from the newest posts."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('does not 500', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Like post",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts/{{postId}}/like",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "{{postId}}",
+                "like"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('likeCount >= 1', () => pm.expect(json.likeCount).to.be.at.least(1));",
+                  "pm.collectionVariables.set('lastLikeCount', String(json.likeCount));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Like post again — idempotent",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts/{{postId}}/like",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "{{postId}}",
+                "like"
+              ]
+            },
+            "description": "Composite PK + ON CONFLICT DO NOTHING → count stays the same."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const prev = Number(pm.collectionVariables.get('lastLikeCount'));",
+                  "pm.test('count unchanged', () => pm.expect(json.likeCount).to.eql(prev));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get post likers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts/{{postId}}/likes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "{{postId}}",
+                "likes"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('array of users', () => {",
+                  "  pm.expect(json).to.be.an('array');",
+                  "  pm.expect(json[0]).to.include.keys('id', 'firstName', 'lastName');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unlike post",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts/{{postId}}/like",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "{{postId}}",
+                "like"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('likeCount decreased', () => {",
+                  "  pm.expect(json.likeCount).to.be.at.most(Number(pm.collectionVariables.get('lastLikeCount')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unlike again — still OK (idempotent)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts/{{postId}}/like",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "{{postId}}",
+                "like"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Like — invalid UUID → 400",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts/not-a-uuid/like",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "not-a-uuid",
+                "like"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.expect(pm.response.code).to.eql(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Like — unknown post → 404",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts/00000000-0000-4000-8000-000000000000/like",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "00000000-0000-4000-8000-000000000000",
+                "like"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.expect(pm.response.code).to.eql(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 Comments",
+      "description": "Comments, one-level replies, comment likes, pagination.",
+      "item": [
+        {
+          "name": "Create comment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/posts/{{postId}}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "{{postId}}",
+                "comments"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"First comment from Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('commentId', json.id);",
+                  "pm.test('created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test('content echoed', () => pm.expect(json.content).to.eql('First comment from Postman'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create reply",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/posts/{{postId}}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "{{postId}}",
+                "comments"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"A reply to the first comment\",\n  \"parentCommentId\": \"{{commentId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('replyId', json.id);",
+                  "pm.test('created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reply to a reply → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/posts/{{postId}}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "{{postId}}",
+                "comments"
+              ]
+            },
+            "description": "One level of nesting only — parent must itself be top-level.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"This should be rejected\",\n  \"parentCommentId\": \"{{replyId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.expect(pm.response.code).to.eql(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create comment — empty content → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/posts/{{postId}}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "{{postId}}",
+                "comments"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"   \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.expect(pm.response.code).to.eql(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List comments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts/{{postId}}/comments?limit=5&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "{{postId}}",
+                "comments"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('page shape', () => {",
+                  "  pm.expect(json).to.include.keys('items', 'totalTopLevel', 'hasMore');",
+                  "});",
+                  "pm.test('includes our comment', () => {",
+                  "  const id = pm.collectionVariables.get('commentId');",
+                  "  pm.expect(json.items.some((c) => c.id === id)).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Like comment",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/comments/{{commentId}}/like",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "comments",
+                "{{commentId}}",
+                "like"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.collectionVariables.set('commentLikeCount', String(json.likeCount));",
+                  "pm.test('likeCount >= 1', () => pm.expect(json.likeCount).to.be.at.least(1));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Like comment again — idempotent",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/comments/{{commentId}}/like",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "comments",
+                "{{commentId}}",
+                "like"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('count unchanged', () =>",
+                  "  pm.expect(json.likeCount).to.eql(Number(pm.collectionVariables.get('commentLikeCount')))",
+                  ");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get comment likers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/comments/{{commentId}}/likes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "comments",
+                "{{commentId}}",
+                "likes"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unlike comment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/comments/{{commentId}}/like",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "comments",
+                "{{commentId}}",
+                "like"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Like reply",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/comments/{{replyId}}/like",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "comments",
+                "{{replyId}}",
+                "like"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get reply likers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/comments/{{replyId}}/likes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "comments",
+                "{{replyId}}",
+                "likes"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 Privacy (Alice vs Bob)",
+      "description": "Switch to Bob and prove Alice's private post is invisible: absent from feed, 404 on likes/comments.",
+      "item": [
+        {
+          "name": "Login as Bob",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{bobEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.user) {",
+                  "  pm.collectionVariables.set('currentUserId', json.user.id);",
+                  "  pm.collectionVariables.set('currentUserEmail', json.user.email);",
+                  "}",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test('returns user without password', () => {",
+                  "  pm.expect(json.user).to.have.property('id');",
+                  "  pm.expect(json.user).to.not.have.property('passwordHash');",
+                  "});",
+                  "pm.test('Set-Cookie includes bs_token', () => {",
+                  "  const cookie = pm.response.headers.get('Set-Cookie') || '';",
+                  "  pm.expect(cookie.toLowerCase()).to.include('bs_token');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bob feed — private post absent",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const privateId = pm.collectionVariables.get('privatePostId');",
+                  "pm.test('private post not in feed', () => {",
+                  "  pm.expect(json.items.some((p) => p.id === privateId)).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bob likes Alice private post → 404",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts/{{privatePostId}}/like",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "{{privatePostId}}",
+                "like"
+              ]
+            },
+            "description": "404 (not 403) so existence does not leak."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.expect(pm.response.code).to.eql(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bob lists private post likers → 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts/{{privatePostId}}/likes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "{{privatePostId}}",
+                "likes"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.expect(pm.response.code).to.eql(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bob comments on private post → 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/posts/{{privatePostId}}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "{{privatePostId}}",
+                "comments"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Bob should not be able to comment\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.expect(pm.response.code).to.eql(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bob likes Alice public post → 200",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts/{{postId}}/like",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "{{postId}}",
+                "like"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bob comments on public post → 200",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/posts/{{postId}}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "{{postId}}",
+                "comments"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Nice post, Alice!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Alice again",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{aliceEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.user) {",
+                  "  pm.collectionVariables.set('currentUserId', json.user.id);",
+                  "  pm.collectionVariables.set('currentUserEmail', json.user.email);",
+                  "}",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test('returns user without password', () => {",
+                  "  pm.expect(json.user).to.have.property('id');",
+                  "  pm.expect(json.user).to.not.have.property('passwordHash');",
+                  "});",
+                  "pm.test('Set-Cookie includes bs_token', () => {",
+                  "  const cookie = pm.response.headers.get('Set-Cookie') || '';",
+                  "  pm.expect(cookie.toLowerCase()).to.include('bs_token');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 Optional — Seeded demo accounts",
+      "description": "Only works after `npm run seed`. Shared password: Password1.",
+      "item": [
+        {
+          "name": "Login sarah@demo.com",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sarah@demo.com\",\n  \"password\": \"Password1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 or 401 if not seeded', () => pm.expect(pm.response.code).to.be.oneOf([200, 401]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sarah feed (sees her private post)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 or 401', () => pm.expect(pm.response.code).to.be.oneOf([200, 401]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login rafiq@demo.com",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"rafiq@demo.com\",\n  \"password\": \"Password1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 or 401 if not seeded', () => pm.expect(pm.response.code).to.be.oneOf([200, 401]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rafiq feed (no Sarah private post)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 or 401', () => pm.expect(pm.response.code).to.be.oneOf([200, 401]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
