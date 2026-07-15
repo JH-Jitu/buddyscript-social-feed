@@ -22,6 +22,7 @@ const FRONTEND_DIST = join(__dirname, '..', '..', 'frontend', 'dist');
     TypeOrmModule.forRootAsync({
       useFactory: () => ({
         ...buildPostgresOptions(),
+        autoLoadEntities: true,
       }),
     }),
 

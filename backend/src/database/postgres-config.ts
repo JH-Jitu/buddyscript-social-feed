@@ -13,8 +13,17 @@ function wantsSsl(env: NodeJS.ProcessEnv, databaseUrl?: string): boolean {
   if (env.POSTGRES_SSL === 'true') return true;
   if (env.POSTGRES_SSL === 'false') return false;
   if (env.NODE_ENV === 'production') return true;
-  if (databaseUrl && /render\.com|amazonaws\.com|neon\.tech/i.test(databaseUrl))
+
+  // Hosted Postgres almost always requires TLS. Match common providers and
+  // Render's *internal* hostname (dpg-xxxxx-a — no ".render.com" suffix).
+  if (
+    databaseUrl &&
+    /render\.com|amazonaws\.com|neon\.tech|supabase\.co|dpg-[a-z0-9]+-a(?:\.|\/|$)/i.test(
+      databaseUrl,
+    )
+  ) {
     return true;
+  }
   return false;
 }
 
@@ -30,7 +39,9 @@ export function buildPostgresOptions(
     let host = '';
     try {
       host = new URL(databaseUrl).hostname;
-    } catch {}
+    } catch {
+      /* handled below */
+    }
     if (!host) {
       throw new Error(
         'DATABASE_URL is set but is not a valid URL. Expected ' +
